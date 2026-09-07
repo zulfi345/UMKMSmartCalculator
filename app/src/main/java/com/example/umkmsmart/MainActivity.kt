@@ -166,10 +166,12 @@ class MainActivity : Activity() {
     private fun showReport() { val root=screenRoot(); root.addView(topBar("Laporan Usaha") { back() }); val scroll=ScrollView(this); val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(16),dp(16),dp(16))}; var sales=0
         for (tx in transactions) {
             if (tx.type=="Penjualan") sales += tx.amount
-        } var expenses=0
+        }
+        var expenses=0
         for (tx in transactions) {
             if (tx.type=="Pengeluaran") expenses += tx.amount
-        } var modal=0
+        }
+        var modal=0
         for (tx in transactions) {
             if (tx.type=="Penjualan") {
                 val product = products.firstOrNull { it.id==tx.productId }
@@ -177,7 +179,8 @@ class MainActivity : Activity() {
                     modal += product.buyPrice * tx.qty
                 }
             }
-        } val profit=sales-expenses-modal; box.addView(reportCard("Total Penjualan",rupiah(sales),green));box.addView(reportCard("Modal Produk Terjual",rupiah(modal),muted),margins(-1,-2,0,dp(10),0,0));box.addView(reportCard("Total Pengeluaran",rupiah(expenses),red),margins(-1,-2,0,dp(10),0,0));box.addView(reportCard("Keuntungan Bersih",rupiah(profit),if(profit>=0)green else red),margins(-1,-2,0,dp(10),0,0));box.addView(sectionTitle("Produk Stok Menipis"),margins(-1,-2,0,dp(22),0,dp(8)));products.filter{it.stock<=it.minStock}.ifEmpty{listOf()}.forEach{box.addView(text("• ${it.name}: stok ${it.stock}",15f,textColor()),margins(-1,-2,0,0,0,dp(6)))}; if(products.none{it.stock<=it.minStock})box.addView(text("Semua stok berada di atas batas minimum.",14f,muted));scroll.addView(box);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));root.addView(bottomNav("Laporan"));setContentView(root) }
+        }
+        val profit=sales-expenses-modal; box.addView(reportCard("Total Penjualan",rupiah(sales),green));box.addView(reportCard("Modal Produk Terjual",rupiah(modal),muted),margins(-1,-2,0,dp(10),0,0));box.addView(reportCard("Total Pengeluaran",rupiah(expenses),red),margins(-1,-2,0,dp(10),0,0));box.addView(reportCard("Keuntungan Bersih",rupiah(profit),if(profit>=0)green else red),margins(-1,-2,0,dp(10),0,0));box.addView(sectionTitle("Produk Stok Menipis"),margins(-1,-2,0,dp(22),0,dp(8)));products.filter{it.stock<=it.minStock}.ifEmpty{listOf()}.forEach{box.addView(text("• ${it.name}: stok ${it.stock}",15f,textColor()),margins(-1,-2,0,0,0,dp(6)))}; if(products.none{it.stock<=it.minStock})box.addView(text("Semua stok berada di atas batas minimum.",14f,muted));scroll.addView(box);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));root.addView(bottomNav("Laporan"));setContentView(root) }
 
     private fun showTransactions() { val root=screenRoot();root.addView(topBar("Riwayat Transaksi"){back()});val scroll=ScrollView(this);val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(16),dp(16),dp(16))};transactions.asReversed().forEach{box.addView(transactionCard(it),margins(-1,-2,0,0,0,dp(8)))};scroll.addView(box);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));root.addView(bottomNav("Lainnya"));setContentView(root) }
 
