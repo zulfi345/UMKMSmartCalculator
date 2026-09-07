@@ -2,8 +2,7 @@ name: Build VECTA HUB UMKM APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -11,9 +10,8 @@ permissions:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -32,21 +30,15 @@ jobs:
         run: yes | sdkmanager --licenses || true
 
       - name: Make Gradle executable
-        run: chmod +x ./gradlew
-
-      - name: Show project
-        run: |
-          pwd
-          ls -la
-          ./gradlew --version
+        run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace --info
+        run: ./gradlew clean :app:assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: VECTA-HUB-UMKM-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
