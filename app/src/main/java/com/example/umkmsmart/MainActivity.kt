@@ -2,18 +2,27 @@ package com.example.umkmsmart
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.*
 import java.text.NumberFormat
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : Activity() {
 
@@ -25,6 +34,16 @@ class MainActivity : Activity() {
     private val muted = Color.rgb(105, 120, 115)
 
     private var darkMode = false
+    private var notificationsEnabled = true
+    private var lowStockThreshold = 5
+    private var businessName = "Usaha Saya"
+    private var businessOwner = ""
+    private var businessPhone = ""
+    private var businessAddress = ""
+    private var backAction: (() -> Unit)? = null
+    private var cashierCategory = "Semua"
+    private var cashierQuery = ""
+    private val prefs by lazy { getSharedPreferences("umkm_smart", MODE_PRIVATE) }
 
     data class Product(
         var name: String,
@@ -60,10 +79,22 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        loadState()
         showSplash()
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        val action = backAction
+        if (action != null) action.invoke() else super.onBackPressed()
+    }
+
+    private fun setBack(action: (() -> Unit)?) {
+        backAction = action
+    }
+
     private fun showSplash() {
+        setBack(null)
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.gravity = Gravity.CENTER
@@ -101,11 +132,12 @@ class MainActivity : Activity() {
     }
 
     private fun showLogin() {
+        setBack(null)
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.gravity = Gravity.CENTER
         root.setPadding(dp(28), dp(28), dp(28), dp(28))
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         val logo = ImageView(this)
         logo.setImageResource(R.drawable.vecta_umkm)
@@ -137,8 +169,8 @@ class MainActivity : Activity() {
 
         card.addView(welcome)
         card.addView(desc, margins(-1, -2, 0, 0, 0, dp(18)))
-        card.addView(username, margins(-1, dp(54), 0, 0, 0, dp(12)))
-        card.addView(password, margins(-1, dp(54), 0, 0, 0, dp(16)))
+        card.addView(username, margins(-1, dp(60), 0, 0, 0, dp(12)))
+        card.addView(password, margins(-1, dp(60), 0, 0, 0, dp(16)))
         card.addView(login, lp(-1, dp(52)))
         card.addView(register, margins(-1, -2, 0, dp(18), 0, 0))
 
@@ -149,9 +181,10 @@ class MainActivity : Activity() {
     }
 
     private fun showDashboard() {
+        setBack(null)
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         val scroll = ScrollView(this)
         val content = LinearLayout(this)
@@ -240,32 +273,41 @@ class MainActivity : Activity() {
     }
 
     private fun showCashier() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Kasir") { showDashboard() })
 
         val search = EditText(this)
         search.hint = "Cari produk..."
+        search.setText(cashierQuery)
+        search.textSize = 17f
         search.background = rounded(inputColor(), 14)
         search.setPadding(dp(14), 0, dp(14), 0)
-
-        root.addView(search, margins(-1, dp(52), dp(16), dp(12), dp(16), dp(8)))
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(e: Editable?) {
+                cashierQuery = e?.toString().orEmpty()
+            }
+        })
+        root.addView(search, margins(-1, dp(60), dp(16), dp(12), dp(16), dp(8)))
 
         val category = LinearLayout(this)
         category.orientation = LinearLayout.HORIZONTAL
         category.setPadding(dp(16), 0, dp(16), dp(8))
-
-        listOf("Semua", "Makanan", "Minuman").forEachIndexed { index, name ->
+        listOf("Semua", "Makanan", "Minuman").forEach { name ->
+            val active = cashierCategory == name
             val b = Button(this)
             b.text = name
-            b.textSize = 11f
-            b.setTextColor(if (index == 0) Color.WHITE else textColor())
-            b.background = rounded(if (index == 0) green else inputColor(), 14)
-            category.addView(b, weightMargins(1f, if (index == 0) 0 else dp(4), 0, 0, 0))
+            b.textSize = 12f
+            b.setTextColor(if (active) Color.WHITE else textColor())
+            b.background = rounded(if (active) green else inputColor(), 14)
+            b.setOnClickListener { cashierCategory = name; showCashier() }
+            category.addView(b, weightMargins(1f, if (name == "Semua") 0 else dp(4), 0, 0, 0))
         }
-
         root.addView(category)
 
         val scroll = ScrollView(this)
@@ -273,11 +315,11 @@ class MainActivity : Activity() {
         list.orientation = LinearLayout.VERTICAL
         list.setPadding(dp(16), dp(4), dp(16), dp(16))
 
-        products.forEach { product ->
-            list.addView(
-                cashierProduct(product),
-                margins(-1, -2, 0, 0, 0, dp(8))
-            )
+        products.filter { product ->
+            (cashierCategory == "Semua" || product.category.equals(cashierCategory, true)) &&
+            (cashierQuery.isBlank() || product.name.contains(cashierQuery, true))
+        }.forEach { product ->
+            list.addView(cashierProduct(product), margins(-1, -2, 0, 0, 0, dp(8)))
         }
 
         scroll.addView(list)
@@ -298,7 +340,7 @@ class MainActivity : Activity() {
         bottom.orientation = LinearLayout.HORIZONTAL
         bottom.gravity = Gravity.CENTER_VERTICAL
         bottom.setPadding(dp(16), dp(10), dp(16), dp(12))
-        bottom.setBackgroundColor(cardColor())
+        bottom.background = cardColor()
 
         val totalText = text("$itemCount Item | ${rupiah(total)}", 15f, textColor(), true)
 
@@ -320,39 +362,36 @@ class MainActivity : Activity() {
         row.setPadding(dp(14), dp(12), dp(14), dp(12))
         row.background = rounded(cardColor(), 18)
 
-        val icon = text(
-            if (product.category == "Minuman") "🥤" else "🍟",
-            26f,
-            textColor(),
-            false,
-            Gravity.CENTER
-        )
-
-        val info = LinearLayout(this)
-        info.orientation = LinearLayout.VERTICAL
-
+        val icon = text(if (product.category == "Minuman") "🥤" else "🍟", 26f, textColor(), false, Gravity.CENTER)
+        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         info.addView(text(product.name, 16f, textColor(), true))
         info.addView(text("${rupiah(product.sellPrice)}   •   Stok: ${product.stock}", 12f, muted))
 
-        val add = Button(this)
-        add.text = "+"
-        add.textSize = 20f
-        add.setTextColor(Color.WHITE)
-        add.background = rounded(green, 50)
-
-        add.setOnClickListener {
-            if (product.stock <= 0) {
-                toast("Stok produk habis")
-            } else {
-                cart[product.name] = (cart[product.name] ?: 0) + 1
+        val controls = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val minus = Button(this).apply {
+            text = "−"; textSize = 20f; setTextColor(textColor()); background = rounded(inputColor(), 50)
+            setOnClickListener {
+                val qty = cart[product.name] ?: 0
+                if (qty > 1) cart[product.name] = qty - 1 else cart.remove(product.name)
                 showCashier()
             }
         }
+        val qtyText = text("${cart[product.name] ?: 0}", 15f, textColor(), true, Gravity.CENTER)
+        val add = Button(this).apply {
+            text = "+"; textSize = 20f; setTextColor(Color.WHITE); background = rounded(green, 50)
+            setOnClickListener {
+                val inCart = cart[product.name] ?: 0
+                if (product.stock - inCart <= 0) toast("Jumlah di keranjang sudah mencapai stok")
+                else { cart[product.name] = inCart + 1; showCashier() }
+            }
+        }
+        controls.addView(minus, lp(dp(46), dp(46)))
+        controls.addView(qtyText, lp(dp(34), dp(46)))
+        controls.addView(add, lp(dp(46), dp(46)))
 
         row.addView(icon, lp(dp(48), dp(48)))
         row.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(add, lp(dp(48), dp(48)))
-
+        row.addView(controls)
         return row
     }
 
@@ -387,14 +426,16 @@ class MainActivity : Activity() {
 
         transactions.add(0, Sale("Penjualan Kasir", total, "Penjualan"))
         cart.clear()
+        saveState()
         toast("Pembayaran berhasil disimpan")
         showDashboard()
     }
 
     private fun showProducts() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Manajemen Stok") { showDashboard() })
 
@@ -436,9 +477,10 @@ class MainActivity : Activity() {
     }
 
     private fun showProductDetail(product: Product) {
+        setBack { showProducts() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Detail Produk") { showProducts() })
 
@@ -468,6 +510,7 @@ class MainActivity : Activity() {
         delete.background = rounded(Color.rgb(205, 55, 55), 14)
         delete.setOnClickListener {
             products.remove(product)
+            saveState()
             showProducts()
         }
 
@@ -478,9 +521,10 @@ class MainActivity : Activity() {
     }
 
     private fun showAddProduct() {
+        setBack { showProducts() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Tambah Produk") { showProducts() })
 
@@ -521,6 +565,7 @@ class MainActivity : Activity() {
                 )
             )
 
+            saveState()
             toast("Produk berhasil ditambahkan")
             showProducts()
         }
@@ -534,9 +579,10 @@ class MainActivity : Activity() {
     }
 
     private fun showCalculator() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Kalkulator Harga Jual") { showDashboard() })
 
@@ -581,9 +627,10 @@ class MainActivity : Activity() {
     }
 
     private fun showSaleForm() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Catat Penjualan") { showDashboard() })
 
@@ -616,6 +663,7 @@ class MainActivity : Activity() {
                 )
             )
 
+            saveState()
             toast("Penjualan berhasil disimpan")
         }
 
@@ -630,9 +678,10 @@ class MainActivity : Activity() {
     }
 
     private fun showExpense() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Catat Pengeluaran") { showDashboard() })
 
@@ -657,6 +706,7 @@ class MainActivity : Activity() {
                 )
             )
 
+            saveState()
             toast("Pengeluaran berhasil disimpan")
             showDashboard()
         }
@@ -671,6 +721,7 @@ class MainActivity : Activity() {
     }
 
     private fun showReport() {
+        setBack { showDashboard() }
         val revenue = transactions
             .filter { it.type == "Penjualan" }
             .sumOf { it.amount }
@@ -683,7 +734,7 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Laporan Usaha") { showDashboard() })
 
@@ -722,9 +773,10 @@ class MainActivity : Activity() {
     }
 
     private fun showTransactions() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Transaksi") { showDashboard() })
 
@@ -748,9 +800,10 @@ class MainActivity : Activity() {
     }
 
     private fun showSettings() {
+        setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(backgroundColor())
+        root.background = backgroundColor()
 
         root.addView(topBar("Pengaturan") { showDashboard() })
 
@@ -758,22 +811,16 @@ class MainActivity : Activity() {
         content.orientation = LinearLayout.VERTICAL
         content.setPadding(dp(16), dp(16), dp(16), dp(16))
 
-        listOf(
-            "Data Usaha" to "Nama usaha dan informasi toko",
-            "Backup & Restore" to "Simpan dan pulihkan data",
-            "Notifikasi" to "Pengingat stok dan transaksi"
-        ).forEach { item ->
-            content.addView(
-                settingCard(item.first, item.second) {},
-                margins(-1, -2, 0, 0, 0, dp(8))
-            )
-        }
+        content.addView(settingCard("Data Usaha", "Nama usaha dan informasi toko") { showBusinessData() }, margins(-1, -2, 0, 0, 0, dp(8)))
+        content.addView(settingCard("Backup & Restore", "Backup data dan pulihkan kapan saja") { showBackupRestore() }, margins(-1, -2, 0, 0, 0, dp(8)))
+        content.addView(settingCard("Notifikasi", if (notificationsEnabled) "Aktif • Pengingat stok rendah" else "Nonaktif") { showNotificationSettings() }, margins(-1, -2, 0, 0, 0, dp(8)))
 
         val dark = settingCard(
             "Tema",
             if (darkMode) "Dark Mode aktif" else "Light Mode aktif"
         ) {
             darkMode = !darkMode
+            saveState()
             showSettings()
         }
 
@@ -791,17 +838,101 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
+    private fun showBusinessData() {
+        setBack { showSettings() }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(backgroundColor()) }
+        root.addView(topBar("Data Usaha") { showSettings() })
+        val scroll = ScrollView(this)
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(24)) }
+        val name = input("Nama Usaha").apply { setText(businessName) }
+        val owner = input("Nama Pemilik").apply { setText(businessOwner) }
+        val phone = input("Nomor WhatsApp / Telepon").apply { setText(businessPhone); inputType = InputType.TYPE_CLASS_PHONE }
+        val address = input("Alamat Usaha").apply { setText(businessAddress); minLines = 2; maxLines = 4; setSingleLine(false) }
+        content.addView(name); content.addView(owner, margins(-1, dp(60), 0, dp(12), 0, 0)); content.addView(phone, margins(-1, dp(60), 0, dp(12), 0, 0)); content.addView(address, margins(-1, dp(92), 0, dp(12), 0, 0))
+        val save = button("Simpan Data Usaha")
+        save.setOnClickListener {
+            if (name.text.toString().trim().isBlank()) { toast("Nama usaha wajib diisi"); return@setOnClickListener }
+            businessName = name.text.toString().trim(); businessOwner = owner.text.toString().trim(); businessPhone = phone.text.toString().trim(); businessAddress = address.text.toString().trim()
+            saveState(); toast("Data usaha berhasil disimpan"); showSettings()
+        }
+        content.addView(save, margins(-1, dp(54), 0, dp(18), 0, 0)); scroll.addView(content); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f)); setContentView(root)
+    }
+
+    private fun showNotificationSettings() {
+        setBack { showSettings() }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(backgroundColor()) }
+        root.addView(topBar("Notifikasi") { showSettings() })
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(20)) }
+        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(14), dp(16), dp(14)); background = rounded(cardColor(), 18) }
+        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        info.addView(text("Notifikasi Aktif", 17f, textColor(), true)); info.addView(text("Aktifkan pengingat stok rendah", 13f, muted))
+        val sw = Switch(this).apply { isChecked = notificationsEnabled }
+        row.addView(info, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(sw); content.addView(row)
+        content.addView(text("Batas stok rendah", 15f, textColor(), true), margins(-1, -2, 0, dp(18), 0, dp(8)))
+        val threshold = input("Contoh: 5", true).apply { setText(lowStockThreshold.toString()) }
+        content.addView(threshold, lp(-1, dp(60)))
+        val save = button("Simpan Pengaturan Notifikasi")
+        save.setOnClickListener { notificationsEnabled = sw.isChecked; lowStockThreshold = (threshold.text.toString().toIntOrNull() ?: 5).coerceAtLeast(0); saveState(); toast("Pengaturan notifikasi disimpan") }
+        content.addView(save, margins(-1, dp(54), 0, dp(16), 0, 0))
+        val test = button("Cek Stok Rendah")
+        test.setOnClickListener { val low = products.filter { it.stock <= lowStockThreshold }; toast(if (low.isEmpty()) "Tidak ada produk dengan stok rendah" else "Stok rendah: " + low.joinToString { it.name }) }
+        content.addView(test, margins(-1, dp(54), 0, dp(10), 0, 0)); root.addView(content); root.addView(Space(this), LinearLayout.LayoutParams(-1, 0, 1f)); setContentView(root)
+    }
+
+    private fun showBackupRestore() {
+        setBack { showSettings() }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(backgroundColor()) }
+        root.addView(topBar("Backup & Restore") { showSettings() })
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(20)) }
+        content.addView(text("Backup Data", 20f, textColor(), true)); content.addView(text("Simpan salinan produk, transaksi, dan pengaturan dalam format teks JSON.", 14f, muted))
+        val backup = button("Buat & Salin Backup")
+        backup.setOnClickListener {
+            val json = exportStateJson(); val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager; cm.setPrimaryClip(ClipData.newPlainText("Backup UMKM Smart", json)); toast("Backup berhasil dibuat dan disalin ke clipboard")
+        }
+        content.addView(backup, margins(-1, dp(54), 0, dp(16), 0, 0))
+        content.addView(text("Restore Data", 20f, textColor(), true)); content.addView(text("Tempel teks backup yang sebelumnya disalin.", 14f, muted))
+        val restore = button("Restore dari Teks Backup")
+        restore.setOnClickListener { showRestoreDialog() }
+        content.addView(restore, margins(-1, dp(54), 0, dp(12), 0, 0))
+        val reset = button("Reset Data ke Contoh")
+        reset.setOnClickListener { AlertDialog.Builder(this).setTitle("Reset data?").setMessage("Produk dan transaksi akan kembali ke data contoh.").setNegativeButton("Batal", null).setPositiveButton("Reset") { _, _ -> resetSampleData(); saveState(); toast("Data berhasil direset"); showSettings() }.show() }
+        content.addView(reset, margins(-1, dp(54), 0, dp(12), 0, 0)); root.addView(content); root.addView(Space(this), LinearLayout.LayoutParams(-1, 0, 1f)); setContentView(root)
+    }
+
+    private fun showRestoreDialog() {
+        val input = EditText(this).apply { hint = "Tempel teks JSON backup di sini"; minLines = 6; gravity = Gravity.TOP; setPadding(dp(16), dp(12), dp(16), dp(12)) }
+        AlertDialog.Builder(this).setTitle("Restore Backup").setView(input).setNegativeButton("Batal", null).setPositiveButton("Pulihkan") { _, _ ->
+            try { importStateJson(input.text.toString()); saveState(); toast("Data berhasil dipulihkan"); showSettings() } catch (e: Exception) { toast("Backup tidak valid") }
+        }.show()
+    }
+
+    private fun exportStateJson(): String {
+        val root = JSONObject(); root.put("businessName", businessName); root.put("businessOwner", businessOwner); root.put("businessPhone", businessPhone); root.put("businessAddress", businessAddress); root.put("darkMode", darkMode); root.put("notificationsEnabled", notificationsEnabled); root.put("lowStockThreshold", lowStockThreshold)
+        val ps = JSONArray(); products.forEach { p -> ps.put(JSONObject().put("name", p.name).put("sellPrice", p.sellPrice).put("buyPrice", p.buyPrice).put("stock", p.stock).put("category", p.category).put("description", p.description)) }; root.put("products", ps)
+        val ts = JSONArray(); transactions.forEach { t -> ts.put(JSONObject().put("title", t.title).put("amount", t.amount).put("type", t.type)) }; root.put("transactions", ts); return root.toString()
+    }
+
+    private fun importStateJson(raw: String) {
+        val root = JSONObject(raw); businessName = root.optString("businessName", businessName); businessOwner = root.optString("businessOwner", businessOwner); businessPhone = root.optString("businessPhone", businessPhone); businessAddress = root.optString("businessAddress", businessAddress); darkMode = root.optBoolean("darkMode", darkMode); notificationsEnabled = root.optBoolean("notificationsEnabled", notificationsEnabled); lowStockThreshold = root.optInt("lowStockThreshold", lowStockThreshold)
+        val ps = root.optJSONArray("products") ?: JSONArray(); val ts = root.optJSONArray("transactions") ?: JSONArray(); products.clear(); for (i in 0 until ps.length()) { val o = ps.getJSONObject(i); products.add(Product(o.optString("name"), o.optInt("sellPrice"), o.optInt("buyPrice"), o.optInt("stock"), o.optString("category", "Produk"), o.optString("description"))) }
+        transactions.clear(); for (i in 0 until ts.length()) { val o = ts.getJSONObject(i); transactions.add(Sale(o.optString("title"), o.optInt("amount"), o.optString("type"))) }
+    }
+
+    private fun saveState() { prefs.edit().putString("state", exportStateJson()).apply() }
+    private fun loadState() { val raw = prefs.getString("state", null) ?: return; try { importStateJson(raw) } catch (_: Exception) {} }
+    private fun resetSampleData() { products.clear(); products.addAll(listOf(Product("Keripik Singkong",5000,3000,20,"Makanan","Keripik singkong renyah dan gurih"), Product("Pisang Crispy",8000,4500,15,"Makanan","Pisang crispy dengan topping pilihan"), Product("Brownies",12000,7000,8,"Makanan","Brownies cokelat lembut"), Product("Es Teh Manis",3000,1200,30,"Minuman","Teh manis segar"), Product("Kopi Susu",7000,3500,5,"Minuman","Kopi susu creamy"))); transactions.clear(); transactions.addAll(listOf(Sale("Keripik Singkong • 5 pcs",25000,"Penjualan"),Sale("Kopi Susu • 3 pcs",21000,"Penjualan"),Sale("Pisang Crispy • 2 pcs",16000,"Penjualan"),Sale("Pembelian bahan baku",50000,"Pengeluaran"))) }
+
     private fun topBar(title: String, back: () -> Unit): View {
         val bar = LinearLayout(this)
         bar.gravity = Gravity.CENTER_VERTICAL
         bar.setPadding(dp(12), dp(8), dp(16), dp(8))
-        bar.setBackgroundColor(darkGreen)
+        bar.background = darkGreen
 
         val backButton = Button(this)
         backButton.text = "←"
         backButton.textSize = 22f
         backButton.setTextColor(Color.WHITE)
-        backButton.setBackgroundColor(Color.TRANSPARENT)
+        backButton.background = Color.TRANSPARENT
         backButton.setOnClickListener { back() }
 
         val titleText = text(title, 18f, Color.WHITE, true)
@@ -817,7 +948,7 @@ class MainActivity : Activity() {
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
         nav.setPadding(dp(4), dp(4), dp(4), dp(4))
-        nav.setBackgroundColor(cardColor())
+        nav.background = cardColor()
 
         val items = listOf(
             "Beranda" to { showDashboard() },
@@ -832,7 +963,7 @@ class MainActivity : Activity() {
             b.text = name
             b.textSize = 10f
             b.setTextColor(if (name == active) green else muted)
-            b.setBackgroundColor(Color.TRANSPARENT)
+            b.background = Color.TRANSPARENT
             b.setOnClickListener { action() }
             nav.addView(b, LinearLayout.LayoutParams(0, dp(54), 1f))
         }
@@ -960,7 +1091,9 @@ class MainActivity : Activity() {
     private fun input(hint: String, numeric: Boolean = false): EditText {
         val e = EditText(this)
         e.hint = hint
-        e.textSize = 14f
+        e.textSize = 17f
+        e.minHeight = dp(58)
+        e.setSingleLine(!hint.contains("Deskripsi"))
         e.setTextColor(textColor())
         e.setHintTextColor(muted)
         e.background = rounded(inputColor(), 14)
