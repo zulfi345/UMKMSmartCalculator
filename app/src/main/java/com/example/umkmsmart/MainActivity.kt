@@ -105,7 +105,7 @@ class MainActivity : Activity() {
         root.orientation = LinearLayout.VERTICAL
         root.gravity = Gravity.CENTER
         root.setPadding(dp(28), dp(28), dp(28), dp(28))
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         val logo = ImageView(this)
         logo.setImageResource(R.drawable.vecta_umkm)
