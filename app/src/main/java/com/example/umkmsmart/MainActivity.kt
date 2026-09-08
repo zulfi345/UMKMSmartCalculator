@@ -140,7 +140,7 @@ class MainActivity : Activity() {
         root.orientation = LinearLayout.VERTICAL
         root.gravity = Gravity.CENTER
         root.setPadding(dp(28), dp(28), dp(28), dp(28))
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         val logo = ImageView(this)
         logo.setImageResource(R.drawable.vecta_umkm)
@@ -187,7 +187,7 @@ class MainActivity : Activity() {
         setBack(null)
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         val scroll = ScrollView(this)
         val content = LinearLayout(this)
@@ -289,7 +289,7 @@ class MainActivity : Activity() {
         setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         root.addView(topBar("Kasir") { showDashboard() })
 
@@ -353,7 +353,7 @@ class MainActivity : Activity() {
         bottom.orientation = LinearLayout.HORIZONTAL
         bottom.gravity = Gravity.CENTER_VERTICAL
         bottom.setPadding(dp(16), dp(10), dp(16), dp(12))
-        bottom.background = cardColor()
+        bottom.setBackgroundColor(cardColor())
 
         val totalText = text("$itemCount Item | ${rupiah(total)}", 15f, textColor(), true)
 
@@ -448,7 +448,7 @@ class MainActivity : Activity() {
         setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         root.addView(topBar("Manajemen Stok") { showDashboard() })
 
@@ -493,7 +493,7 @@ class MainActivity : Activity() {
         setBack { showProducts() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         root.addView(topBar("Detail Produk") { showProducts() })
 
@@ -537,7 +537,7 @@ class MainActivity : Activity() {
         setBack { showProducts() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         root.addView(topBar("Tambah Produk") { showProducts() })
 
@@ -1006,7 +1006,7 @@ class MainActivity : Activity() {
         setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         root.addView(topBar("Transaksi") { showDashboard() })
 
@@ -1033,7 +1033,7 @@ class MainActivity : Activity() {
         setBack { showDashboard() }
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = backgroundColor()
+        root.setBackgroundColor(backgroundColor())
 
         root.addView(topBar("Pengaturan") { showDashboard() })
 
@@ -1156,13 +1156,13 @@ class MainActivity : Activity() {
         val bar = LinearLayout(this)
         bar.gravity = Gravity.CENTER_VERTICAL
         bar.setPadding(dp(12), dp(8), dp(16), dp(8))
-        bar.background = darkGreen
+        bar.setBackgroundColor(darkGreen)
 
         val backButton = Button(this)
         backButton.text = "←"
         backButton.textSize = 22f
         backButton.setTextColor(Color.WHITE)
-        backButton.background = Color.TRANSPARENT
+        backButton.setBackgroundColor(Color.TRANSPARENT)
         backButton.setOnClickListener { back() }
 
         val titleText = text(title, 18f, Color.WHITE, true)
@@ -1178,7 +1178,7 @@ class MainActivity : Activity() {
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
         nav.setPadding(dp(4), dp(4), dp(4), dp(4))
-        nav.background = cardColor()
+        nav.setBackgroundColor(cardColor())
 
         val items = listOf(
             "Beranda" to { showDashboard() },
@@ -1193,7 +1193,7 @@ class MainActivity : Activity() {
             b.text = name
             b.textSize = 10f
             b.setTextColor(if (name == active) green else muted)
-            b.background = Color.TRANSPARENT
+            b.setBackgroundColor(Color.TRANSPARENT)
             b.setOnClickListener { action() }
             nav.addView(b, LinearLayout.LayoutParams(0, dp(54), 1f))
         }
